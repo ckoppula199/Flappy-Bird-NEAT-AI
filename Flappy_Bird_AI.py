@@ -17,6 +17,10 @@ PIPE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'pipe
 BG_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'bg.png')))     # Background image
 BASE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join('imgs', 'base.png'))) # Base (floor) image
 
+"""
+---------------BIRD CLASS---------------
+"""
+
 class Bird:
     IMGS = BIRD_IMGS
     MAX_ROTATION = 25    # How much bird is going to tilt when aiming upwards or downwards
@@ -97,6 +101,63 @@ class Bird:
 
     def get_mask(self):
         return pygame.mask.from_surface(self.img)
+
+
+"""
+---------------PIPE CLASS---------------
+"""
+
+class Pipe(object):
+    GAP = 200
+    VEL = 5
+
+    def __init__(self, x):
+        self.x = x
+        self.height = 0
+
+        # Keeps track of where the top and bottom of the pipe is going to be drawn
+        self.top = 0
+        self.bottom = 0
+        # Images for top and bottom pipe
+        self.PIPE_TOP = pygame.transform.flip(PIPE_IMG, False, True)
+        self.PIPE_BOTTOM = PIPE_IMG
+
+        self.passed = False # Checks if bird has passed the pipe
+        self.set_height()
+
+    # Works out the position to place the pipe images
+    def set_height(self):
+        self.height = random.randrange(40, 450)
+        self.top = self.height - self.PIPE_TOP.get_height()
+        self.bottom = self.height + self.GAP
+
+    def move(self):
+        self.x -= self.VEL
+
+    def draw(self, win):
+        win.blit(self.PIPE_TOP, (self.x, self.top))
+        win.blit(self.PIPE_BOTTOM, (self.x, self.bottom))
+
+    # Gets masks of the bird and pipes to detect if pixels of the image collided
+    def collide(self, bird):
+        bird_mask = bird.get_mask()
+        top_mask = pygame.mask.from_surface(self.PIPE_TOP)
+        bottom_mask = pygame.mask.from_surface(self.PIPE_BOTTOM)
+
+        # Offset is how far away the top left corners are from each other
+        top_offset = (self.x - bird.x, self.top - round(bird.y))
+        bottom_offset = (self.x - bird.x, self.bottom - round(bird.y))
+
+        # Below 2 variable will be None if no collision occured
+        bottom_point = bird_mask.overlap(bottom_mask, bottom_offset)
+        top_point = bird_mask.overlap(top_mask, top_offset)
+
+        if top_point or bottom_point:
+            return True
+
+        return False
+
+
 
 
 def draw_window(win, bird):
