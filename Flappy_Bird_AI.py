@@ -5,8 +5,8 @@ import random
 import os
 
 # Screen Dimensions
-WIN_WIDTH = 800
-WIN_HEIGHT = 1000
+WIN_WIDTH = 500
+WIN_HEIGHT = 800
 
 # Load Images used in the game
 # Stores the 3 images of the bird and makes them twice as large as the original image
@@ -31,7 +31,7 @@ class Bird:
         self.tick_count = 0 # Keeps track of how long since the last jump
         self.vel = 0
         self.height = self.y
-        self.img_count = 0 # Keeps track of which image of the bird is being shown
+        self.img_count = 0 # Keeps track of which image of the bird is being shown and how many frames it's been shown for
         self.img = self.IMGS[0] # Image of bird to display
 
     def jump(self):
@@ -41,4 +41,84 @@ class Bird:
 
     # To be called on every bird at every frame
     def move(self):
-        pass
+        self.tick_count += 1
+
+        # displacement determines how many pixels we move up or down in the current frame
+        d = self.vel * self.tick_count + 1.5 * self.tick_count ** 2
+
+        # 'Terminal velocity' limits how much it will move up or down
+        if d >= 16:
+            d = 16
+
+        # If moving upwards, move up a bit more, just makes the game look more fluid and nicer
+        if d < 0:
+            d -= 2
+
+        self.y = self.y + d
+
+        # If moving upwards
+        if d < 0 or self.y < self.height + 50:
+            # Prevents tilting bird completly backwards.
+            if self.tilt < self.MAX_ROTATION:
+                self.tilt = self.MAX_ROTATION
+        else:
+            # Changes bird form looking like it faces upwards to downwards
+            if self.tilt > -90:
+                self.tilt -= self.ROT_VEL
+
+    def draw(self, win):
+        self.img_count += 1
+
+        # Change image being shown based on how many frames have passed to make it
+        # look like the bird is flapping its wings
+        if self.img_count < self.ANIMATION_TIME:
+            self.img = self.IMGS[0]
+        elif self.img_count < self.ANIMATION_TIME * 2:
+            self.img = self.IMGS[1]
+        elif self.img_count < self.ANIMATION_TIME * 3:
+            self.img = self.IMGS[2]
+        elif self.img_count < self.ANIMATION_TIME * 4:
+            self.img = self.IMGS[1]
+        elif self.img_count < self.ANIMATION_TIME * 4 + 1:
+            self.img = self.IMGS[0]
+            self.img_count = 0
+
+        # If bird facing down set it to neutral wings
+        if self.tilt <= -80:
+            self.img = self.IMGS[1]
+            self.img_count = self.ANIMATION_TIME * 2
+
+        # Below lines taken from StackOverflow
+        # Rotates image around top left pixel
+        rotated_image = pygame.transform.rotate(self.img, self.tilt)
+        # Moves image to make it look like it rotated around the centre
+        new_rectangle = rotated_image.get_rect(center=self.img.get_rect(topleft=(self.x, self.y)).center)
+        win.blit(rotated_image, new_rectangle.topleft)
+
+    def get_mask(self):
+        return pygame.mask.from_surface(self.img)
+
+
+def draw_window(win, bird):
+    win.blit(BG_IMG, (0,0))
+    bird.draw(win)
+    pygame.display.update()
+
+def main():
+    bird = Bird(200, 200)
+    win = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+    clock = pygame.time.Clock()
+
+    run = True
+    while run:
+        clock.tick(30)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+        # bird.move()
+        draw_window(win, bird)
+    pygame.quit()
+    quit()
+
+
+main()
