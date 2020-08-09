@@ -192,7 +192,7 @@ class Base:
         win.blit(self.IMG, (self.x2, self.y))
 
 # Draws all the objects onto the current frame
-def draw_window(win, bird, pipes, base, score):
+def draw_window(win, birds, pipes, base, score):
     win.blit(BG_IMG, (0,0))
 
     for pipe in pipes:
@@ -202,12 +202,29 @@ def draw_window(win, bird, pipes, base, score):
     win.blit(text, (WIN_WIDTH -10 -text.get_width(), 10))
 
     base.draw(win)
-    bird.draw(win)
+
+    for bird in birds:
+        bird.draw(win)
+
     pygame.display.update()
 
-# Main game loop
-def main():
-    bird = Bird(230, 350)
+"""
+---------------FITNESS FUNCTION---------------
+"""
+
+def eval_genomes(genomes, config):
+    nets = []
+    ge = []
+    birds = []
+
+    for _, genome in genomes:
+        # Set up nerual network for each genome
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        nets.append(net)
+        birds.append(Bird(230, 350))
+        genome.fitness = 0
+        ge.append(genome)
+
     base = Base(730)
     pipes = [Pipe(600)]
     win = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
@@ -221,41 +238,88 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
+                pygame.quit()
+                quit()
 
-        # bird.move()
+        # Determine which pipe is the next pipe to go through if multiple are on the screen
+        pipe_idx = 0
+        if len(birds) > 0:
+            if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():
+                pipe_idx = 1
+        else:
+            run = False
+            break
+
+        for x, bird in enumerate(birds):
+            bird.move()
+            ge[x].fitness += 0.1
+
+            # Pass input values to the neural network
+            output = nets[x].activate((bird.y, abs(bird.y - pipes[pipe_idx].height), abs(bird.y - pipes[pipe_idx].bottom)))
+            if output[0] > 0.5:
+                # Jump if confidence > 0.5
+                bird.jump()
+
+
         add_pipe = False
         remove_list = []
         for pipe in pipes:
-            if pipe.collide(bird):
-                pass
+            for x, bird in enumerate(birds):
+                if pipe.collide(bird):
+                    ge[x].fitness -= 1
+                    birds.pop(x)
+                    nets.pop(x)
+                    ge.pop(x)
 
-            # if pipe is off the screen
+                # Check is bird passed pipe and indicate to add new pipe
+                if not pipe.passed and pipe.x < bird.x:
+                    pipe.passed = True
+                    add_pipe = True
+
+            # if pipe is off the screen remove it
             if pipe.x + pipe.PIPE_TOP.get_width() < 0:
                 remove_list.append(pipe)
 
-            # Check is bird passed pipe and indicate to add new pipe
-            if not pipe.passed and pipe.x < bird.x:
-                pipe.passed = True
-                add_pipe = True
 
             pipe.move()
 
         # Adds new random pipe to game
         if add_pipe:
             score += 1
+            for genome in ge:
+                genome.fitness += 5
             pipes.append(Pipe(600))
 
         for pipe in remove_list:
             pipes.remove(pipe)
 
-        if bird.y + bird.img.get_height() >= 730:
-            pass
+        # Check if birds hit the ground or go too high
+        for x, bird in enumerate(birds):
+            if bird.y + bird.img.get_height() >= 730 or bird.y < 0:
+                birds.pop(x)
+                nets.pop(x)
+                ge.pop(x)
+
 
         base.move()
-        draw_window(win, bird, pipes, base, score)
+        draw_window(win, birds, pipes, base, score)
 
-    pygame.quit()
-    quit()
+def run(config_path):
+    # Sets up the neat module using config file paramters
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                config_path)
 
+    # Generates population based on paramters in the config file
+    population = neat.Population(config)
+    # Provides console output giving stats on current generation
+    population.add_reporter(neat.StdOutReporter(True))
+    population.add_reporter(neat.StatisticsReporter())
 
-main()
+    # Pass fitness function and number of generations to run for
+    winner = population.run(eval_genomes, 50)
+
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, "config-flappy-bird.txt")
+    run(config_path)
